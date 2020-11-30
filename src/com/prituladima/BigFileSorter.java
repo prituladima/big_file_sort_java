@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.*;
 
 import static com.prituladima.Constants.*;
 
@@ -11,11 +12,11 @@ public class BigFileSorter {
     //Use -Xmx64m to limit Heap size to 64 mb
     public static void main(String[] args) throws IOException {
 
-
+        long start = System.currentTimeMillis();
         //naiveSort();
         parrSort();
-
-
+        long end = System.currentTimeMillis();
+        System.out.printf("Time of sort is : %s ms\n", end - start);
     }
 
     private static void parrSort() throws IOException {
@@ -49,17 +50,53 @@ public class BigFileSorter {
             }
         }
 
-        while (!deque.isEmpty() && deque.size() > 1) {
-            String first = deque.removeFirst();
-            String second = deque.removeFirst();
+        System.out.println("File was sorted!");
 
-            final String name = deque.isEmpty() ? SORTED_FILE_NAME : Util.randomUUID();
-            System.out.printf("%d. Merging %s and %s to new created %s file \n", ++index, first, second, name);
+        System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(new ArrayList<>(deque))));
 
-            File file = new File(TEMP_FILES_FOLDER + name);
+    }
+
+    public static class MergeSort<N extends Comparable<N>> extends RecursiveTask<String> {
+        private List<String> fileNames;
+
+        public MergeSort(List<String> elements) {
+            this.fileNames = new ArrayList<>(elements);
+        }
+
+        @Override
+        protected String compute() {
+            if (this.fileNames.size() <= 1)
+                return this.fileNames.get(0);
+            else {
+                final int pivot = this.fileNames.size() / 2;
+                MergeSort<N> leftTask = new MergeSort<N>(this.fileNames.subList(0, pivot));
+                MergeSort<N> rightTask = new MergeSort<N>(this.fileNames.subList(pivot, this.fileNames.size()));
+
+                leftTask.fork();
+                rightTask.fork();
+
+                String left = leftTask.join();
+                String right = rightTask.join();
+
+                try {
+                    return merge(left, right);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return null;
+                }
+            }
+        }
+
+        private String merge(String first, String second) throws IOException {
+            String res = Util.randomUUID();
+            System.out.printf(" Merging %s and %s to new created %s file \n", first, second, res);
+
+            File file = new File(TEMP_FILES_FOLDER + res);
+
 
             Files.createDirectories(Paths.get(file.getParent()));
             file.createNewFile();
+
 
             try (
                     Scanner scannerFirst = new Scanner(new File(TEMP_FILES_FOLDER + first));
@@ -82,17 +119,15 @@ public class BigFileSorter {
                     counter++;
                 }
 
-                deque.addLast(name);
-
                 new File(TEMP_FILES_FOLDER + first).delete();
                 new File(TEMP_FILES_FOLDER + second).delete();
 
                 System.out.printf("Count = %d\n", counter);
             }
 
-        }
-        System.out.println("File was sorted!");
 
+            return res;
+        }
     }
 
 
