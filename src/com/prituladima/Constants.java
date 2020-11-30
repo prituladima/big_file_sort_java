@@ -7,4 +7,6 @@ public class Constants {
     static final String BIG_FILE_NAME = WORKING_FOLDER + BIG_INPUT_FILE;
     static final String TEMP_FILES_FOLDER = WORKING_FOLDER + "temp/";
 
+    static final int FILE_SIZE = 1_000_000;
+    static final int CHUNK_SIZE = 100_000;
 }

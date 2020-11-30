@@ -19,41 +19,41 @@ public class BigFileSorter {
     }
 
     private static void parrSort() throws IOException {
-        final List<String> files = new ArrayList<>();
+        Deque<String> deque = new ArrayDeque<>();
         int index = 0;
         try (Scanner scanner = new Scanner(new File(Constants.BIG_FILE_NAME))) {
-            while (scanner.hasNextLine()) {
+            while (scanner.hasNext()) {
                 final String name = Util.randomUUID();
 
-                files.add(name);
+                deque.addLast(name);
                 System.out.printf("%d. Writing sorted %s file\n", ++index, name);
                 File file = new File(TEMP_FILES_FOLDER + name);
 
                 Files.createDirectories(Paths.get(file.getParent()));
                 file.createNewFile();
 
-                List<String> toBeSorted = new ArrayList<>(100_000);
-                int size = 100_000;
-                while (size-- > 0 & scanner.hasNextLine()) {
-                    toBeSorted.add(scanner.nextLine());
+
+                List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
+
+                for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++) {
+                    toBeSorted.add(scanner.next());
                 }
 
                 toBeSorted.sort(Comparator.naturalOrder());
-
-                final Writer writer = new BufferedWriter(new FileWriter(file));
-
-                for (String s : toBeSorted) {
-                    writer.append(s).append('\n');
+                System.out.printf("Count = %d\n", toBeSorted.size());
+                try (Writer writer = new BufferedWriter(new FileWriter(file))) {
+                    for (String s : toBeSorted) {
+                        writer.append(s).append('\n');
+                    }
                 }
-                writer.close();
             }
         }
-        Deque<String> deque = new ArrayDeque<>(files);
+
         while (!deque.isEmpty() && deque.size() > 1) {
             String first = deque.removeFirst();
             String second = deque.removeFirst();
 
-            final String name = deque.isEmpty() ?  SORTED_FILE_NAME : Util.randomUUID();
+            final String name = deque.isEmpty() ? SORTED_FILE_NAME : Util.randomUUID();
             System.out.printf("%d. Merging %s and %s to new created %s file \n", ++index, first, second, name);
 
             File file = new File(TEMP_FILES_FOLDER + name);
@@ -66,30 +66,36 @@ public class BigFileSorter {
                     Scanner scannerSecond = new Scanner(new File(TEMP_FILES_FOLDER + second));
                     Writer writer = new BufferedWriter(new FileWriter(file));
             ) {
-                String valFirst = scannerFirst.nextLine();
-                String valSecond = scannerSecond.nextLine();
-
-                while (scannerFirst.hasNextLine() && scannerSecond.hasNextLine()) {
+                String valFirst = scannerFirst.next();
+                String valSecond = scannerSecond.next();
+                int counter = 0;
+                while (scannerFirst.hasNext() && scannerSecond.hasNext()) {
                     if (valFirst.compareTo(valSecond) < 0) {
                         writer.append(valFirst).append('\n');
-                        valFirst = scannerFirst.nextLine();
+                        valFirst = scannerFirst.next();
                     } else {
                         writer.append(valSecond).append('\n');
-                        valSecond = scannerSecond.nextLine();
+                        valSecond = scannerSecond.next();
                     }
+                    counter++;
                 }
 
-                while (scannerFirst.hasNextLine()) {
-                    writer.append(valFirst = scannerFirst.nextLine()).append('\n');
+                while (scannerFirst.hasNext()) {
+                    writer.append(valFirst = scannerFirst.next()).append('\n');
+                    counter++;
                 }
 
-                while (scannerFirst.hasNextLine()) {
-                    writer.append(valSecond = scannerSecond.nextLine()).append('\n');
+                while (scannerSecond.hasNext()) {
+                    writer.append(valSecond = scannerSecond.next()).append('\n');
+                    counter++;
                 }
 
-                deque.add(name);
+                deque.addLast(name);
+
                 new File(TEMP_FILES_FOLDER + first).delete();
                 new File(TEMP_FILES_FOLDER + second).delete();
+
+                System.out.printf("Count = %d\n", counter);
             }
 
         }
