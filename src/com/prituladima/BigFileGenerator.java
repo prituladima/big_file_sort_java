@@ -16,12 +16,14 @@ public class BigFileGenerator {
         Files.createDirectories(Paths.get(file.getParent()));
         file.createNewFile();
         long start = System.currentTimeMillis();
-        Writer myWriter = new BufferedWriter(new FileWriter(file));
-        for (int i = 0 ; i < 1_000_000; i++) {
-            myWriter.write(Util.randomUUID());
-            myWriter.write('\n');
+        try (Writer myWriter = new BufferedWriter(new FileWriter(file))) {
+            for (int i = 0; i < 1_000_000; i++) {
+                if (i % 100_000 == 0) {
+                    System.out.printf("Generated %d UUID already \n", i);
+                }
+                myWriter.append(Util.randomUUID()).append('\n');
+            }
         }
-        myWriter.close();
         long end = System.currentTimeMillis();
         System.out.printf("File created after: %s ms", end - start);
         //36 -> 1 000 000 -> 1218 ms
