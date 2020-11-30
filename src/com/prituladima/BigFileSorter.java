@@ -66,27 +66,19 @@ public class BigFileSorter {
                     Scanner scannerSecond = new Scanner(new File(TEMP_FILES_FOLDER + second));
                     Writer writer = new BufferedWriter(new FileWriter(file));
             ) {
-                String valFirst = scannerFirst.next();
-                String valSecond = scannerSecond.next();
+                String valFirst = scannerFirst.hasNext() ? scannerFirst.next() : null;
+                String valSecond = scannerSecond.hasNext() ? scannerSecond.next() : null;
                 int counter = 0;
-                while (scannerFirst.hasNext() && scannerSecond.hasNext()) {
-                    if (valFirst.compareTo(valSecond) < 0) {
+                while (valFirst != null || valSecond != null) {
+                    if (valSecond == null || (valFirst != null && valFirst.compareTo(valSecond) < 0)) {
                         writer.append(valFirst).append('\n');
-                        valFirst = scannerFirst.next();
+                        valFirst = scannerFirst.hasNext() ? scannerFirst.next() : null;
+
                     } else {
                         writer.append(valSecond).append('\n');
-                        valSecond = scannerSecond.next();
+                        valSecond = scannerSecond.hasNext() ? scannerSecond.next() : null;
+
                     }
-                    counter++;
-                }
-
-                while (scannerFirst.hasNext()) {
-                    writer.append(valFirst = scannerFirst.next()).append('\n');
-                    counter++;
-                }
-
-                while (scannerSecond.hasNext()) {
-                    writer.append(valSecond = scannerSecond.next()).append('\n');
                     counter++;
                 }
 
