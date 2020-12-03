@@ -21,7 +21,7 @@ public class BigFileSorter {
     private static void sort() throws IOException {
         Deque<String> deque = new ArrayDeque<>();
         int index = 0;
-        try (Scanner scanner = new Scanner(new File(Constants.BIG_FILE_NAME))) {
+        try (BufferedScanner scanner = new BufferedScanner(new File(Constants.BIG_FILE_NAME))) {
             while (scanner.hasNext()) {
                 final String name = Util.randomUUID();
 
@@ -62,8 +62,8 @@ public class BigFileSorter {
             file.createNewFile();
 
             try (
-                    Scanner scannerFirst = new Scanner(new File(TEMP_FILES_FOLDER + first));
-                    Scanner scannerSecond = new Scanner(new File(TEMP_FILES_FOLDER + second));
+                    BufferedScanner scannerFirst = new BufferedScanner(new File(TEMP_FILES_FOLDER + first));
+                    BufferedScanner scannerSecond = new BufferedScanner(new File(TEMP_FILES_FOLDER + second));
                     Writer writer = new BufferedWriter(new FileWriter(file));
             ) {
                 String valFirst = scannerFirst.hasNext() ? scannerFirst.next() : null;
