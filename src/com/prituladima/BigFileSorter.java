@@ -10,15 +10,13 @@ import static com.prituladima.Constants.*;
 public class BigFileSorter {
     //Use -Xmx64m to limit Heap size to 64 mb
     public static void main(String[] args) throws IOException {
-
-
-        //naiveSort();
-        parrSort();
-
-
+        long start = System.currentTimeMillis();
+        sort();
+        long end = System.currentTimeMillis();
+        System.out.printf("Sorting time is [%s] ms\n", end - start);
     }
 
-    private static void parrSort() throws IOException {
+    private static void sort() throws IOException {
         Deque<String> deque = new ArrayDeque<>();
         int index = 0;
         try (Scanner scanner = new Scanner(new File(Constants.BIG_FILE_NAME))) {
@@ -94,28 +92,5 @@ public class BigFileSorter {
         System.out.println("File was sorted!");
 
     }
-
-
-    private static void naiveSort() throws IOException {
-        List<String> list = new ArrayList<>();
-        try (Scanner scanner = new Scanner(new File(Constants.BIG_FILE_NAME))) {
-            int i = 0;
-            while (scanner.hasNextLine()) {
-                list.add(scanner.nextLine());
-                i++;
-                if (i % 1000 == 0) {
-                    System.out.println(i);
-                }
-            }
-        }
-
-        list.sort(Comparator.naturalOrder());
-
-//        try (Writer writer = new BufferedWriter(new FileWriter(TEMP_FILES_FOLDER + SORTED_FILE_NAME))) {
-//            Files.createDirectories(Paths.get(file.getParent()));
-//            file.createNewFile();
-//        }
-    }
-
 
 }
