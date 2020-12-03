@@ -11,9 +11,7 @@ import static com.prituladima.Constants.*;
 public class BigFileSorter {
     //Use -Xmx64m to limit Heap size to 64 mb
     public static void main(String[] args) throws IOException {
-
         long start = System.currentTimeMillis();
-        //naiveSort();
         parrSort();
         long end = System.currentTimeMillis();
         System.out.printf("Time of sort is : %s ms\n", end - start);
@@ -21,39 +19,58 @@ public class BigFileSorter {
 
     private static void parrSort() throws IOException {
         Deque<String> deque = new ArrayDeque<>();
+//        final ThreadPoolExecutor executor =
+//                (ThreadPoolExecutor) Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+//        final CountDownLatch countDownLatch = new CountDownLatch((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE);
+//        AtomicInteger index = new AtomicInteger();
         int index = 0;
-        try (Scanner scanner = new Scanner(new File(Constants.BIG_FILE_NAME))) {
+        try (BufferedScanner scanner = new BufferedScanner(new File(Constants.BIG_FILE_NAME))) {
             while (scanner.hasNext()) {
-                final String name = Util.randomUUID();
-
-                deque.addLast(name);
-                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
-                File file = new File(TEMP_FILES_FOLDER + name);
-
-                Files.createDirectories(Paths.get(file.getParent()));
-                file.createNewFile();
-
 
                 List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
 
                 for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++) {
                     toBeSorted.add(scanner.next());
                 }
-
+//                executor.submit(() -> {
                 toBeSorted.sort(Comparator.naturalOrder());
                 System.out.printf("Count = %d\n", toBeSorted.size());
+
+                final String name = Util.randomUUID();
+
+                deque.addLast(name);
+                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
+                File file = new File(TEMP_FILES_FOLDER + name);
+
+                try {
+                    Files.createDirectories(Paths.get(file.getParent()));
+                    file.createNewFile();
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                }
+
                 try (Writer writer = new BufferedWriter(new FileWriter(file))) {
                     for (String s : toBeSorted) {
                         writer.append(s).append('\n');
                     }
+                } catch (IOException ioException) {
+                    //ignore
                 }
+//                    countDownLatch.countDown();
+//                });
+
             }
         }
+//        try {
+//            countDownLatch.await();
+//            executor.shutdown();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
 
-        System.out.println("File was sorted!");
 
         System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(new ArrayList<>(deque))));
-
+        System.out.println("File was sorted!");
     }
 
     public static class MergeSort<N extends Comparable<N>> extends RecursiveTask<String> {
@@ -99,8 +116,8 @@ public class BigFileSorter {
 
 
             try (
-                    Scanner scannerFirst = new Scanner(new File(TEMP_FILES_FOLDER + first));
-                    Scanner scannerSecond = new Scanner(new File(TEMP_FILES_FOLDER + second));
+                    BufferedScanner scannerFirst = new BufferedScanner(new File(TEMP_FILES_FOLDER + first));
+                    BufferedScanner scannerSecond = new BufferedScanner(new File(TEMP_FILES_FOLDER + second));
                     Writer writer = new BufferedWriter(new FileWriter(file));
             ) {
                 String valFirst = scannerFirst.hasNext() ? scannerFirst.next() : null;
@@ -129,28 +146,4 @@ public class BigFileSorter {
             return res;
         }
     }
-
-
-    private static void naiveSort() throws IOException {
-        List<String> list = new ArrayList<>();
-        try (Scanner scanner = new Scanner(new File(Constants.BIG_FILE_NAME))) {
-            int i = 0;
-            while (scanner.hasNextLine()) {
-                list.add(scanner.nextLine());
-                i++;
-                if (i % 1000 == 0) {
-                    System.out.println(i);
-                }
-            }
-        }
-
-        list.sort(Comparator.naturalOrder());
-
-//        try (Writer writer = new BufferedWriter(new FileWriter(TEMP_FILES_FOLDER + SORTED_FILE_NAME))) {
-//            Files.createDirectories(Paths.get(file.getParent()));
-//            file.createNewFile();
-//        }
-    }
-
-
 }
