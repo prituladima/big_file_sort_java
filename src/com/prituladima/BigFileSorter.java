@@ -4,8 +4,8 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveTask;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.prituladima.Constants.*;
 
@@ -111,54 +111,49 @@ public class BigFileSorter {
 
     private static void parallelSort() throws IOException {
         Deque<String> deque = new ArrayDeque<>();
-//        final ThreadPoolExecutor executor =
-//                (ThreadPoolExecutor) Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-//        final CountDownLatch countDownLatch = new CountDownLatch((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE);
-//        AtomicInteger index = new AtomicInteger();
-        int index = 0;
+        final ThreadPoolExecutor executor =
+                (ThreadPoolExecutor) Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        final CountDownLatch countDownLatch = new CountDownLatch((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE);
+        AtomicInteger index = new AtomicInteger();
+//        int index = 0;
         try (BufferedScanner scanner = new BufferedScanner(new File(Constants.BIG_FILE_NAME))) {
             while (scanner.hasNext()) {
+                final String name = Util.randomUUID();
+
+                deque.addLast(name);
+                System.out.printf("%d. Writing sorted %s file\n", index.incrementAndGet(), name);
+                File file = new File(TEMP_FILES_FOLDER + name);
+
+                Files.createDirectories(Paths.get(file.getParent()));
+                file.createNewFile();
 
                 List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
 
                 for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++) {
                     toBeSorted.add(scanner.next());
                 }
-//                executor.submit(() -> {
-                toBeSorted.sort(Comparator.naturalOrder());
-                System.out.printf("Count = %d\n", toBeSorted.size());
+                executor.submit(() -> {
+                    toBeSorted.sort(Comparator.naturalOrder());
+                    System.out.printf("Count = %d\n", toBeSorted.size());
 
-                final String name = Util.randomUUID();
-
-                deque.addLast(name);
-                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
-                File file = new File(TEMP_FILES_FOLDER + name);
-
-                try {
-                    Files.createDirectories(Paths.get(file.getParent()));
-                    file.createNewFile();
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
-                }
-
-                try (Writer writer = new BufferedWriter(new FileWriter(file))) {
-                    for (String s : toBeSorted) {
-                        writer.append(s).append('\n');
+                    try (Writer writer = new BufferedWriter(new FileWriter(file))) {
+                        for (String s : toBeSorted) {
+                            writer.append(s).append('\n');
+                        }
+                    } catch (IOException ioException) {
+                        //ignore
                     }
-                } catch (IOException ioException) {
-                    //ignore
-                }
-//                    countDownLatch.countDown();
-//                });
+                    countDownLatch.countDown();
+                });
 
             }
         }
-//        try {
-//            countDownLatch.await();
-//            executor.shutdown();
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
+        try {
+            countDownLatch.await();
+            executor.shutdown();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
 
         System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(new ArrayList<>(deque))));

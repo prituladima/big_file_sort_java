@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+import static com.prituladima.Constants.CHUNK_SIZE;
 import static com.prituladima.Constants.FILE_SIZE;
 
 
@@ -20,7 +21,7 @@ public class BigFileGenerator {
         long start = System.currentTimeMillis();
         try (Writer myWriter = new BufferedWriter(new FileWriter(file))) {
             for (int i = 0; i < FILE_SIZE; i++) {
-                if (i % 100_000 == 0) {
+                if (i % CHUNK_SIZE == 0) {
                     System.out.printf("Generated %d UUID already \n", i);
                 }
                 myWriter.append(Util.randomUUID()).append('\n');
