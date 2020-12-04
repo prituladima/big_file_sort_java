@@ -29,6 +29,7 @@ public class BigFileSorter {
         System.out.printf("File size is %d strings\n", FILE_SIZE);
         System.out.printf("Sorting time is [%s] ms\n", sortingTime);
         System.out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
+        System.out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime)*100);
     }
 
     private static void sort() throws IOException {
@@ -127,33 +128,34 @@ public class BigFileSorter {
                 Files.createDirectories(Paths.get(file.getParent()));
                 file.createNewFile();
 
-                List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
+//                List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
 
-                for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++) {
-                    toBeSorted.add(scanner.next());
-                }
-                executor.submit(() -> {
-                    toBeSorted.sort(Comparator.naturalOrder());
-                    System.out.printf("Count = %d\n", toBeSorted.size());
+//                for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++) {
+//                    toBeSorted.add(scanner.next());
+//                }
+//                executor.submit(() -> {
+//                    toBeSorted.sort(Comparator.naturalOrder());
 
-                    try (Writer writer = new BufferedWriter(new FileWriter(file))) {
-                        for (String s : toBeSorted) {
-                            writer.append(s).append('\n');
-                        }
-                    } catch (IOException ioException) {
-                        //ignore
+                int count = 0;
+                try (Writer writer = new BufferedWriter(new FileWriter(file))) {
+                    for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++, count++) {
+                        writer.append(scanner.next()).append('\n');
                     }
-                    countDownLatch.countDown();
-                });
+                } catch (IOException ioException) {
+                    //ignore
+                }
+                System.out.printf("Count = %d\n", count);
+//                    countDownLatch.countDown();
+//                });
 
             }
         }
-        try {
-            countDownLatch.await();
-            executor.shutdown();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+//        try {
+//            countDownLatch.await();
+//            executor.shutdown();
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
 
 
         System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(new ArrayList<>(deque))));
@@ -169,9 +171,26 @@ public class BigFileSorter {
 
         @Override
         protected String compute() {
-            if (this.fileNames.size() <= 1)
+            if (this.fileNames.size() <= 1) {
+                final List<String> toBeSorted = new ArrayList<>();
+                final String fileName = TEMP_FILES_FOLDER + this.fileNames.get(0);
+                try (BufferedScanner scanner = new BufferedScanner(new File(fileName))) {
+                    while (scanner.hasNext()) {
+                        toBeSorted.add(scanner.next());
+                    }
+                } catch (IOException ioException) {
+                    //ignore
+                }
+                toBeSorted.sort(Comparator.naturalOrder());
+                try (Writer writer = new BufferedWriter(new FileWriter(fileName))) {
+                    for (String s : toBeSorted) {
+                        writer.append(s).append('\n');
+                    }
+                } catch (IOException ioException) {
+                    //ignore
+                }
                 return this.fileNames.get(0);
-            else {
+            } else {
                 final int pivot = this.fileNames.size() / 2;
                 MergeSort<N> leftTask = new MergeSort<N>(this.fileNames.subList(0, pivot));
                 MergeSort<N> rightTask = new MergeSort<N>(this.fileNames.subList(pivot, this.fileNames.size()));
