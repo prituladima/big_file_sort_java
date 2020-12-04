@@ -12,10 +12,23 @@ import static com.prituladima.Constants.*;
 public class BigFileSorter {
     //Use -Xmx64m to limit Heap size to 64 mb
     public static void main(String[] args) throws IOException {
-        long start = System.currentTimeMillis();
-        sort();
-        long end = System.currentTimeMillis();
-        System.out.printf("Sorting time is [%s] ms\n", end - start);
+        long sortingTime;
+        long parallelSortingTime;
+        {
+            long start = System.currentTimeMillis();
+            sort();
+            long end = System.currentTimeMillis();
+            sortingTime = end - start;
+        }
+        {
+            long start = System.currentTimeMillis();
+            parallelSort();
+            long end = System.currentTimeMillis();
+            parallelSortingTime = end - start;
+        }
+        System.out.printf("File size is %d strings\n", FILE_SIZE);
+        System.out.printf("Sorting time is [%s] ms\n", sortingTime);
+        System.out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
     }
 
     private static void sort() throws IOException {
@@ -96,7 +109,7 @@ public class BigFileSorter {
     }
 
 
-    private static void parrSort() throws IOException {
+    private static void parallelSort() throws IOException {
         Deque<String> deque = new ArrayDeque<>();
 //        final ThreadPoolExecutor executor =
 //                (ThreadPoolExecutor) Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
