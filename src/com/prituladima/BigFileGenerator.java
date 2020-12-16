@@ -1,8 +1,6 @@
 package com.prituladima;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 import static com.prituladima.Constants.CHUNK_SIZE;
 import static com.prituladima.Constants.FILE_SIZE;
@@ -11,15 +9,8 @@ import static com.prituladima.Constants.FILE_SIZE;
 public class BigFileGenerator {
 
     public static void main(String[] args) throws IOException {
-
-        File file = new File(Constants.BIG_FILE_NAME);
-//        if(file.exists()){
-//            return;
-//        }
-        Files.createDirectories(Paths.get(file.getParent()));
-        file.createNewFile();
         long start = System.currentTimeMillis();
-        try (Writer myWriter = new BufferedWriter(new FileWriter(file))) {
+        try (Writer myWriter = new BufferedWriter(new FileWriter(FileUtil.createFile(Constants.BIG_INPUT_FILE)))) {
             for (int i = 0; i < FILE_SIZE; i++) {
                 if (i % CHUNK_SIZE == 0) {
                     System.out.printf("Generated %d UUID already \n", i);
