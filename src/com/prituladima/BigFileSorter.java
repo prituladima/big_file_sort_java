@@ -3,20 +3,22 @@ package com.prituladima;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.prituladima.Constants.*;
 
 public class BigFileSorter {
     //Use -Xmx64m to limit Heap size to 64 mb
+    //-XX:ActiveProcessorCount=16
     public static void main(String[] args) throws IOException {
-        long sortingTime;
+        //long sortingTime;
         long parallelSortingTime;
-        {
-            long start = System.currentTimeMillis();
-            sort();
-            long end = System.currentTimeMillis();
-            sortingTime = end - start;
-        }
+//        {
+//            long start = System.currentTimeMillis();
+//            sort();
+//            long end = System.currentTimeMillis();
+//            sortingTime = end - start;
+//        }
         {
             long start = System.currentTimeMillis();
             parallelSort();
@@ -24,26 +26,27 @@ public class BigFileSorter {
             parallelSortingTime = end - start;
         }
         System.out.printf("File size is %d strings\n", FILE_SIZE);
-        System.out.printf("Sorting time is [%s] ms\n", sortingTime);
+//        System.out.printf("Sorting time is [%s] ms\n", sortingTime);
         System.out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
-        System.out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime) * 100);
+//        System.out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime) * 100);
     }
 
     private static void sort() throws IOException {
         Deque<String> deque = new ArrayDeque<>();
         int index = 0;
-        try (BufferedScanner scanner = new BufferedScanner(FileUtil.file(Constants.BIG_INPUT_FILE))) {
-            while (scanner.hasNext()) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(Constants.BIG_INPUT_FILE)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
                 final String name = Util.randomUUID();
 
                 deque.addLast(name);
                 System.out.printf("%d. Writing sorted %s file\n", ++index, name);
 
                 List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
-
-                for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++) {
-                    toBeSorted.add(scanner.next());
-                }
+                int j = 1;
+                do {
+                    toBeSorted.add(line);
+                } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
 
                 toBeSorted.sort(Comparator.naturalOrder());
                 System.out.printf("Count = %d\n", toBeSorted.size());
@@ -72,8 +75,10 @@ public class BigFileSorter {
     private static void parallelSort() throws IOException {
         List<String> list = new ArrayList<>();
         int index = 0;
-        try (BufferedScanner scanner = new BufferedScanner(FileUtil.file(Constants.BIG_INPUT_FILE))) {
-            while (scanner.hasNext()) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(Constants.BIG_INPUT_FILE)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+
                 final String name = Util.randomUUID();
 
                 list.add(name);
@@ -81,11 +86,11 @@ public class BigFileSorter {
 
                 int count = 0;
                 try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
-                    for (int j = 0; j < CHUNK_SIZE && scanner.hasNext(); j++, count++) {
-                        writer.append(scanner.next()).append('\n');
-                    }
-                } catch (IOException ioException) {
-                    //ignore
+                    int j = 1;
+                    do {
+                        writer.append(line).append('\n');
+                        count++;
+                    } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
                 }
                 System.out.printf("Count = %d\n", count);
             }
@@ -96,7 +101,9 @@ public class BigFileSorter {
     }
 
     public static final class MergeSort<N extends Comparable<N>> extends RecursiveTask<String> {
-        private List<String> fileNames;
+        public final static int availableProcessors = Runtime.getRuntime().availableProcessors();
+        public final static AtomicInteger usedProcessors = new AtomicInteger(0);
+        private final List<String> fileNames;
 
         public MergeSort(List<String> elements) {
             this.fileNames = new ArrayList<>(elements);
@@ -107,9 +114,10 @@ public class BigFileSorter {
             if (this.fileNames.size() <= 1) {
                 final List<String> toBeSorted = new ArrayList<>();
                 final String fileName = TEMP_FILES_FOLDER + this.fileNames.get(0);
-                try (BufferedScanner scanner = new BufferedScanner(FileUtil.file(fileName))) {
-                    while (scanner.hasNext()) {
-                        toBeSorted.add(scanner.next());
+                try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(fileName)))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        toBeSorted.add(line);
                     }
                 } catch (IOException ioException) {
                     //ignore
@@ -149,23 +157,23 @@ public class BigFileSorter {
     private static void merge(String first, String second, String res) throws IOException {
         System.out.printf(" Merging %s and %s to new created %s file \n", first, second, res);
 
+        System.out.printf(" Used processors %d from %d availableProcessors \n", MergeSort.usedProcessors.incrementAndGet(), MergeSort.availableProcessors);
+
         try (
-                BufferedScanner scannerFirst = new BufferedScanner(FileUtil.file(first));
-                BufferedScanner scannerSecond = new BufferedScanner(FileUtil.file(second));
+                BufferedReader scannerFirst = new BufferedReader(new FileReader(FileUtil.file(first)));
+                BufferedReader scannerSecond = new BufferedReader(new FileReader(FileUtil.file(second)));
                 Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(res)));
         ) {
-            String valFirst = scannerFirst.hasNext() ? scannerFirst.next() : null;
-            String valSecond = scannerSecond.hasNext() ? scannerSecond.next() : null;
+            String valFirst = scannerFirst.readLine();
+            String valSecond = scannerSecond.readLine();
             int counter = 0;
             while (valFirst != null || valSecond != null) {
                 if (valSecond == null || (valFirst != null && valFirst.compareTo(valSecond) < 0)) {
                     writer.append(valFirst).append('\n');
-                    valFirst = scannerFirst.hasNext() ? scannerFirst.next() : null;
-
+                    valFirst = scannerFirst.readLine();
                 } else {
                     writer.append(valSecond).append('\n');
-                    valSecond = scannerSecond.hasNext() ? scannerSecond.next() : null;
-
+                    valSecond = scannerSecond.readLine();
                 }
                 counter++;
             }
@@ -174,6 +182,7 @@ public class BigFileSorter {
             FileUtil.removeFile(second);
 
             System.out.printf("Count = %d\n", counter);
+            MergeSort.usedProcessors.decrementAndGet();
         }
     }
 }

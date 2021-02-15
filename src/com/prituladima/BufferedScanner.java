@@ -4,12 +4,13 @@ import java.io.*;
 import java.util.Iterator;
 import java.util.StringTokenizer;
 
+@Deprecated
 public final class BufferedScanner implements Iterator<String>, AutoCloseable {
     private static final StringTokenizer EOF = new StringTokenizer("");
     private StringTokenizer tokenizer;
     private BufferedReader reader;
 
-    public BufferedScanner(File file) throws IOException {
+    private BufferedScanner(File file) throws IOException {
         this.reader = new BufferedReader(new FileReader(file));
     }
 
