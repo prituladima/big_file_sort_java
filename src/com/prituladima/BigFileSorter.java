@@ -4,6 +4,7 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
 import static com.prituladima.Constants.*;
@@ -21,6 +22,7 @@ public class BigFileSorter {
             long sortingTime;
             long parallelSortingTime;
             long naiveParallelSortingTime;
+            long partitionParallelSortTime;
             {
                 long start = System.currentTimeMillis();
                 sort();
@@ -39,11 +41,18 @@ public class BigFileSorter {
                 long end = System.currentTimeMillis();
                 naiveParallelSortingTime = end - start;
             }
+            {
+                long start = System.currentTimeMillis();
+                partitionParallelSort();
+                long end = System.currentTimeMillis();
+                partitionParallelSortTime = end - start;
+            }
 //        System.out.printf("File size is %d strings\n", FILE_SIZE);
             System.out.printf("Sorting time is [%s] ms\n", sortingTime);
             System.out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
 //        System.out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime) * 100);
             System.out.printf("Naive Parallel Sorting time is [%s] ms\n", naiveParallelSortingTime);
+            System.out.printf("Partition Parallel Sorting time is [%s] ms\n", partitionParallelSortTime);
         }
     }
 
@@ -112,44 +121,48 @@ public class BigFileSorter {
             }
         }
 
-        System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(list)));
+        System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(list, true)));
         System.out.println("File was sorted!");
     }
 
     public static final class MergeSort<N extends Comparable<N>> extends RecursiveTask<String> {
 
         private final List<String> fileNames;
+        private final boolean sort;
 
-        public MergeSort(List<String> elements) {
+        public MergeSort(List<String> elements, boolean sort) {
             this.fileNames = new ArrayList<>(elements);
+            this.sort = sort;
         }
 
         @Override
         protected String compute() {
             if (this.fileNames.size() <= 1) {
-                final List<String> toBeSorted = new ArrayList<>();
-                final String fileName = TEMP_FILES_FOLDER + this.fileNames.get(0);
-                try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(fileName)))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        toBeSorted.add(line);
+                if (sort) {
+                    final List<String> toBeSorted = new ArrayList<>();
+                    final String fileName = TEMP_FILES_FOLDER + this.fileNames.get(0);
+                    try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(fileName)))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            toBeSorted.add(line);
+                        }
+                    } catch (IOException ioException) {
+                        //ignore
                     }
-                } catch (IOException ioException) {
-                    //ignore
-                }
-                toBeSorted.sort(Comparator.naturalOrder());
-                try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.file(fileName)))) {
-                    for (String s : toBeSorted) {
-                        writer.append(s).append('\n');
+                    toBeSorted.sort(Comparator.naturalOrder());
+                    try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.file(fileName)))) {
+                        for (String s : toBeSorted) {
+                            writer.append(s).append('\n');
+                        }
+                    } catch (IOException ioException) {
+                        //ignore
                     }
-                } catch (IOException ioException) {
-                    //ignore
                 }
                 return this.fileNames.get(0);
             } else {
                 final int pivot = this.fileNames.size() / 2;
-                MergeSort<N> leftTask = new MergeSort<>(this.fileNames.subList(0, pivot));
-                MergeSort<N> rightTask = new MergeSort<>(this.fileNames.subList(pivot, this.fileNames.size()));
+                MergeSort<N> leftTask = new MergeSort<>(this.fileNames.subList(0, pivot), sort);
+                MergeSort<N> rightTask = new MergeSort<>(this.fileNames.subList(pivot, this.fileNames.size()), sort);
 
                 leftTask.fork();
                 rightTask.fork();
@@ -196,7 +209,6 @@ public class BigFileSorter {
             }
         }
 
-        int availableProcessors = Runtime.getRuntime().availableProcessors();
         ExecutorService executorService = Executors.newFixedThreadPool(availableProcessors);
         Supplier<Runnable> supplier = () -> () -> {
             while (true) {
@@ -232,6 +244,78 @@ public class BigFileSorter {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    private static void partitionParallelSort() throws IOException {
+        List<String> list = new ArrayList<>();
+        int index = 0;
+        try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(Constants.BIG_INPUT_FILE)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                final String name = Util.randomUUID();
+
+                list.add(name);
+                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
+
+                List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
+                int j = 1;
+                do {
+                    toBeSorted.add(line);
+                } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
+
+                toBeSorted.sort(Comparator.naturalOrder());
+                System.out.printf("Count = %d\n", toBeSorted.size());
+                try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
+                    for (String s : toBeSorted) {
+                        writer.append(s).append('\n');
+                    }
+                }
+            }
+        }
+        final int len = list.size();
+        AtomicInteger atomicInteger = new AtomicInteger(0);
+        IntFunction<Callable<String>> chunkNumberToRunnable = (chunkIndex) -> () -> {
+            int chunkOffset = chunkIndex * (len / (availableProcessors - 1));
+            int chunkLen = len / (availableProcessors - 1);
+            Deque<String> deque = new ArrayDeque<>();
+            for (int i = chunkOffset; i < Math.min(chunkOffset + chunkLen, len); i++) {
+                deque.add(list.get(i));
+                atomicInteger.incrementAndGet();
+            }
+            while (deque.size() > 1) {
+                String first = deque.removeFirst();
+                String second = deque.removeFirst();
+
+                String res = Util.randomUUID();
+
+                merge(TEMP_FILES_FOLDER + first, TEMP_FILES_FOLDER + second, TEMP_FILES_FOLDER + res);
+                deque.addLast(res);
+            }
+            return deque.removeFirst();
+        };
+
+
+        ExecutorService executorService = Executors.newFixedThreadPool(availableProcessors);
+        List<Future<String>> futureParts = new ArrayList<>();
+        for (int i = 0; i < availableProcessors; i++) {
+            futureParts.add(executorService.submit(chunkNumberToRunnable.apply(i)));
+        }
+        executorService.shutdown();
+        List<String> reducedList = new ArrayList<>();
+        for (Future<String> futurePart : futureParts) {
+            try {
+                reducedList.add(futurePart.get());
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+        if (atomicInteger.get() != index) {
+            throw new RuntimeException(String.format("%d != %d", atomicInteger.get(), index));
+        }
+        ForkJoinPool.commonPool().invoke(new MergeSort<String>(reducedList, false));
+
     }
 
 
