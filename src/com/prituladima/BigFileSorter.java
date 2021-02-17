@@ -4,31 +4,47 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static com.prituladima.Constants.*;
 
 public class BigFileSorter {
+
+    public final static int availableProcessors = Runtime.getRuntime().availableProcessors();
+    public final static AtomicInteger usedProcessors = new AtomicInteger(0);
+
     //Use -Xmx64m to limit Heap size to 64 mb
     //-XX:ActiveProcessorCount=16
     public static void main(String[] args) throws IOException {
-        //long sortingTime;
-        long parallelSortingTime;
-//        {
-//            long start = System.currentTimeMillis();
-//            sort();
-//            long end = System.currentTimeMillis();
-//            sortingTime = end - start;
-//        }
-        {
-            long start = System.currentTimeMillis();
-            parallelSort();
-            long end = System.currentTimeMillis();
-            parallelSortingTime = end - start;
-        }
-        System.out.printf("File size is %d strings\n", FILE_SIZE);
-//        System.out.printf("Sorting time is [%s] ms\n", sortingTime);
-        System.out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
+        int tests = 1;
+        for (int i = 0; i < tests; i++) {
+            long sortingTime;
+            long parallelSortingTime;
+            long naiveParallelSortingTime;
+            {
+                long start = System.currentTimeMillis();
+                sort();
+                long end = System.currentTimeMillis();
+                sortingTime = end - start;
+            }
+            {
+                long start = System.currentTimeMillis();
+                parallelSort();
+                long end = System.currentTimeMillis();
+                parallelSortingTime = end - start;
+            }
+            {
+                long start = System.currentTimeMillis();
+                naiveParallelSort();
+                long end = System.currentTimeMillis();
+                naiveParallelSortingTime = end - start;
+            }
+//        System.out.printf("File size is %d strings\n", FILE_SIZE);
+            System.out.printf("Sorting time is [%s] ms\n", sortingTime);
+            System.out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
 //        System.out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime) * 100);
+            System.out.printf("Naive Parallel Sorting time is [%s] ms\n", naiveParallelSortingTime);
+        }
     }
 
     private static void sort() throws IOException {
@@ -101,8 +117,7 @@ public class BigFileSorter {
     }
 
     public static final class MergeSort<N extends Comparable<N>> extends RecursiveTask<String> {
-        public final static int availableProcessors = Runtime.getRuntime().availableProcessors();
-        public final static AtomicInteger usedProcessors = new AtomicInteger(0);
+
         private final List<String> fileNames;
 
         public MergeSort(List<String> elements) {
@@ -154,10 +169,76 @@ public class BigFileSorter {
         }
     }
 
+    private static void naiveParallelSort() throws IOException {
+        Deque<String> deque = new ArrayDeque<>();
+        int index = 0;
+        try (BufferedReader reader = new BufferedReader(new FileReader(FileUtil.file(Constants.BIG_INPUT_FILE)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                final String name = Util.randomUUID();
+
+                deque.addLast(name);
+                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
+
+                List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
+                int j = 1;
+                do {
+                    toBeSorted.add(line);
+                } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
+
+                toBeSorted.sort(Comparator.naturalOrder());
+                System.out.printf("Count = %d\n", toBeSorted.size());
+                try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
+                    for (String s : toBeSorted) {
+                        writer.append(s).append('\n');
+                    }
+                }
+            }
+        }
+
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        ExecutorService executorService = Executors.newFixedThreadPool(availableProcessors);
+        Supplier<Runnable> supplier = () -> () -> {
+            while (true) {
+                String first;
+                String second;
+                synchronized (deque) {
+                    if (deque.size() > 1) {
+                        first = deque.removeFirst();
+                        second = deque.removeFirst();
+                    } else {
+                        return;
+                    }
+                }
+                String res = Util.randomUUID();
+
+                try {
+                    merge(TEMP_FILES_FOLDER + first, TEMP_FILES_FOLDER + second, TEMP_FILES_FOLDER + res);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                synchronized (deque) {
+                    deque.addLast(res);
+                }
+            }
+        };
+        for (int i = 0; i < availableProcessors; i++) {
+            executorService.submit(supplier.get());
+        }
+        executorService.shutdown();
+
+        try {
+            executorService.awaitTermination(2, TimeUnit.DAYS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+
     private static void merge(String first, String second, String res) throws IOException {
         System.out.printf(" Merging %s and %s to new created %s file \n", first, second, res);
 
-        System.out.printf(" Used processors %d from %d availableProcessors \n", MergeSort.usedProcessors.incrementAndGet(), MergeSort.availableProcessors);
+        System.out.printf(" Used processors %d from %d availableProcessors \n", usedProcessors.incrementAndGet(), availableProcessors);
 
         try (
                 BufferedReader scannerFirst = new BufferedReader(new FileReader(FileUtil.file(first)));
@@ -182,7 +263,7 @@ public class BigFileSorter {
             FileUtil.removeFile(second);
 
             System.out.printf("Count = %d\n", counter);
-            MergeSort.usedProcessors.decrementAndGet();
+            usedProcessors.decrementAndGet();
         }
     }
 }
