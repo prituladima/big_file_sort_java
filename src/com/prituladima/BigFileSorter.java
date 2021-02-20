@@ -12,9 +12,18 @@ import static com.prituladima.Constants.*;
 
 public class BigFileSorter {
 
+    static {
+        System.loadLibrary("native");
+    }
+
     public final static int availableProcessors = Runtime.getRuntime().availableProcessors();
     public final static AtomicInteger usedProcessors = new AtomicInteger(0);
-
+    public final static PrintStream System_out = debug ? System.out : new PrintStream(new OutputStream(){
+        @Override
+        public void write(int b) throws IOException {
+            //ignore
+        }
+    });
     //Use -Xmx64m to limit Heap size to 64 mb
     //-XX:ActiveProcessorCount=16
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
@@ -26,6 +35,7 @@ public class BigFileSorter {
             long parallelSortingTime = -1;
             long naiveParallelSortingTime = -1;
             long partitionParallelSortTime = -1;
+            long nativeCodeTime = -1;
             if (argsSet.contains("sorting")) {
                 long start = System.currentTimeMillis();
                 sort();
@@ -50,12 +60,21 @@ public class BigFileSorter {
                 long end = System.currentTimeMillis();
                 partitionParallelSortTime = end - start;
             }
-//        System.out.printf("File size is %d strings\n", FILE_SIZE);
+            if (argsSet.contains("nativeCode")) {
+                long start = System.currentTimeMillis();
+                nativeCodeAllowed = true;
+                parallelSort();
+                nativeCodeAllowed = false;
+                long end = System.currentTimeMillis();
+                nativeCodeTime = end - start;
+            }
+//        System_out.printf("File size is %d strings\n", FILE_SIZE);
             out.printf("Sorting time is [%s] ms\n", sortingTime);
             out.printf("Parallel Sorting time is [%s] ms\n", parallelSortingTime);
-//        System.out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime) * 100);
+//        System_out.printf("Better [%f] %%\n", ((sortingTime - parallelSortingTime) * 1.0 / sortingTime) * 100);
             out.printf("Naive Parallel Sorting time is [%s] ms\n", naiveParallelSortingTime);
             out.printf("Partition Parallel Sorting time is [%s] ms\n", partitionParallelSortTime);
+            out.printf("Native Code Parallel Sorting time is [%s] ms\n", nativeCodeTime);
         }
     }
 
@@ -68,7 +87,7 @@ public class BigFileSorter {
                 final String name = Util.randomUUID();
 
                 deque.addLast(name);
-                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
+                System_out.printf("%d. Writing sorted %s file\n", ++index, name);
 
                 List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
                 int j = 1;
@@ -77,7 +96,7 @@ public class BigFileSorter {
                 } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
 
                 toBeSorted.sort(Comparator.naturalOrder());
-                System.out.printf("Count = %d\n", toBeSorted.size());
+                System_out.printf("Count = %d\n", toBeSorted.size());
                 try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
                     for (String s : toBeSorted) {
                         writer.append(s).append('\n');
@@ -95,7 +114,7 @@ public class BigFileSorter {
             merge(TEMP_FILES_FOLDER + first, TEMP_FILES_FOLDER + second, TEMP_FILES_FOLDER + res);
             deque.addLast(res);
         }
-        System.out.println("File was sorted!");
+        System_out.println("File was sorted!");
 
     }
 
@@ -110,7 +129,7 @@ public class BigFileSorter {
                 final String name = Util.randomUUID();
 
                 list.add(name);
-                System.out.printf("%d. Writing sorted %s file\n", index++, name);
+                System_out.printf("%d. Writing sorted %s file\n", index++, name);
 
                 int count = 0;
                 try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
@@ -120,12 +139,12 @@ public class BigFileSorter {
                         count++;
                     } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
                 }
-                System.out.printf("Count = %d\n", count);
+                System_out.printf("Count = %d\n", count);
             }
         }
 
-        System.out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(list, true)));
-        System.out.println("File was sorted!");
+        System_out.println("Name: " + ForkJoinPool.commonPool().invoke(new MergeSort<String>(list, true)));
+        System_out.println("File was sorted!");
     }
 
     public static final class MergeSort<N extends Comparable<N>> extends RecursiveTask<String> {
@@ -194,7 +213,7 @@ public class BigFileSorter {
                 final String name = Util.randomUUID();
 
                 deque.addLast(name);
-                System.out.printf("%d. Writing sorted %s file\n", ++index, name);
+                System_out.printf("%d. Writing sorted %s file\n", ++index, name);
 
                 List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
                 int j = 1;
@@ -203,7 +222,7 @@ public class BigFileSorter {
                 } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
 
                 toBeSorted.sort(Comparator.naturalOrder());
-                System.out.printf("Count = %d\n", toBeSorted.size());
+                System_out.printf("Count = %d\n", toBeSorted.size());
                 try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
                     for (String s : toBeSorted) {
                         writer.append(s).append('\n');
@@ -270,7 +289,7 @@ public class BigFileSorter {
                     final String name = Util.randomUUID();
 
                     chunkList[chunkListIndex++] = name;
-                    System.out.printf("%d. Writing sorted %s file\n", ++index, name);
+                    System_out.printf("%d. Writing sorted %s file\n", ++index, name);
 
                     List<String> toBeSorted = new ArrayList<>(CHUNK_SIZE);
                     int j = 1;
@@ -279,7 +298,7 @@ public class BigFileSorter {
                     } while (j++ < CHUNK_SIZE && (line = reader.readLine()) != null);
 
                     toBeSorted.sort(Comparator.naturalOrder());
-                    System.out.printf("Count = %d\n", toBeSorted.size());
+                    System_out.printf("Count = %d\n", toBeSorted.size());
                     try (Writer writer = new BufferedWriter(new FileWriter(FileUtil.createFile(TEMP_FILES_FOLDER + name)))) {
                         for (String s : toBeSorted) {
                             writer.append(s).append('\n');
@@ -288,7 +307,7 @@ public class BigFileSorter {
                     int chunkOffset = coreIndex * maxChunksForPartition;
                     int upTo = Math.min(chunkOffset + maxChunksForPartition, expectedAmountOfChunks);
                     if (chunkListIndex == upTo) {
-                        System.out.printf("Chunk [%d,%d) is ready! Producing chunk batch for core = [%d]\n", chunkOffset, upTo, coreIndex);
+                        System_out.printf("Chunk [%d,%d) is ready! Producing chunk batch for core = [%d]\n", chunkOffset, upTo, coreIndex);
                         chunksReady[coreIndex++].countDown();
 
                     }
@@ -301,7 +320,7 @@ public class BigFileSorter {
 
             int chunkOffset = coreIndex * maxChunksForPartition;
             int upTo = Math.min(chunkOffset + maxChunksForPartition, expectedAmountOfChunks);
-            System.out.printf("Chunk [%d,%d) is ready! Consuming chunk batch for core = [%d]\n", chunkOffset, upTo, coreIndex);
+            System_out.printf("Chunk [%d,%d) is ready! Consuming chunk batch for core = [%d]\n", chunkOffset, upTo, coreIndex);
 
             Deque<String> deque = new ArrayDeque<>();
 
@@ -334,11 +353,15 @@ public class BigFileSorter {
         ForkJoinPool.commonPool().invoke(new MergeSort<String>(reducedList, false));
     }
 
-
     private static void merge(String first, String second, String res) throws IOException {
-        System.out.printf(" Merging %s and %s to new created %s file \n", first, second, res);
+        if (nativeCodeAllowed) {
+            merge0(WORKING_FOLDER + first, WORKING_FOLDER + second, WORKING_FOLDER + res);
+            return;
+        }
 
-        System.out.printf(" Used processors %d from %d availableProcessors \n", usedProcessors.incrementAndGet(), availableProcessors);
+        System_out.printf(" Merging %s and %s to new created %s file \n", first, second, res);
+
+        System_out.printf(" Used processors %d from %d availableProcessors \n", usedProcessors.incrementAndGet(), availableProcessors);
 
         try (
                 BufferedReader scannerFirst = new BufferedReader(new FileReader(FileUtil.file(first)));
@@ -362,8 +385,10 @@ public class BigFileSorter {
             FileUtil.removeFile(first);
             FileUtil.removeFile(second);
 
-            System.out.printf("Count = %d\n", counter);
+            System_out.printf("Count = %d\n", counter);
             usedProcessors.decrementAndGet();
         }
     }
+
+    private static native void merge0(String first, String second, String res);
 }

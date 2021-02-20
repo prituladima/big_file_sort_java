@@ -1,0 +1,2 @@
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin com_prituladima_BigFileSorter.cpp -o com_prituladima_BigFileSorter.o
+g++ -dynamiclib -o ${HOME}/Library/Java/Extensions/libnative.dylib com_prituladima_BigFileSorter.o -lc
